@@ -68,3 +68,11 @@ vcpkg_installed/
 Testing/
 .cache/
 .idea/
+
+# Test files and generated media
+*.mkv
+*.mp4
+*.avi
+*.mov
+test_*
+decoded_*

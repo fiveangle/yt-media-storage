@@ -22,6 +22,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(PkgConfig REQUIRED)
 find_package(OpenMP REQUIRED)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+
+# Enable Qt MOC, UIC, and RCC for GUI only
+set(CMAKE_AUTOMOC OFF)
+set(CMAKE_AUTOUIC OFF)
+set(CMAKE_AUTORCC OFF)
 
 pkg_check_modules(AVCODEC REQUIRED IMPORTED_TARGET libavcodec)
 pkg_check_modules(AVFORMAT REQUIRED IMPORTED_TARGET libavformat)
@@ -30,6 +36,8 @@ pkg_check_modules(SWSCALE REQUIRED IMPORTED_TARGET libswscale)
 pkg_check_modules(SWRESAMPLE REQUIRED IMPORTED_TARGET libswresample)
 
 add_executable(media_storage)
+add_executable(media_storage_gui)
+
 add_subdirectory(src)
 
 target_link_libraries(media_storage PRIVATE
@@ -41,9 +49,25 @@ target_link_libraries(media_storage PRIVATE
         OpenMP::OpenMP_CXX
 )
 
+target_link_libraries(media_storage_gui PRIVATE
+        PkgConfig::AVCODEC
+        PkgConfig::AVFORMAT
+        PkgConfig::AVUTIL
+        PkgConfig::SWSCALE
+        PkgConfig::SWRESAMPLE
+        OpenMP::OpenMP_CXX
+        Qt6::Core
+        Qt6::Widgets
+)
+
+# Enable Qt MOC only for GUI target
+set_target_properties(media_storage_gui PROPERTIES AUTOMOC ON AUTOUIC ON)
+
 # Check for OpenMP
 if(MSVC)
     target_compile_options(media_storage PRIVATE /O2 /arch:AVX2)
+    target_compile_options(media_storage_gui PRIVATE /O2 /arch:SSSE3)
 else()
     target_compile_options(media_storage PRIVATE -march=native)
+    target_compile_options(media_storage_gui PRIVATE -O2 -mssse3)
 endif()

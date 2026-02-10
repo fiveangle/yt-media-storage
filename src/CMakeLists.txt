@@ -17,6 +17,7 @@
 file(GLOB_RECURSE SRC_CPP CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
+
 file(GLOB_RECURSE SRC_HDR CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/*.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
@@ -31,12 +32,30 @@ file(GLOB_RECURSE LIB_HDR CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/libs/*.hpp"
 )
 
+# Remove main.cpp, drive_manager_ui.cpp, and main_gui.cpp from general sources and handle separately
+list(REMOVE_ITEM SRC_CPP "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
+list(REMOVE_ITEM SRC_CPP "${CMAKE_CURRENT_SOURCE_DIR}/drive_manager_ui.cpp")
+list(REMOVE_ITEM SRC_CPP "${CMAKE_CURRENT_SOURCE_DIR}/main_gui.cpp")
+
 target_sources(media_storage PRIVATE
         ${SRC_CPP} ${SRC_HDR}
         ${LIB_CPP} ${LIB_HDR}
+        "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
+)
+
+target_sources(media_storage_gui PRIVATE
+        ${SRC_CPP} ${SRC_HDR}
+        ${LIB_CPP} ${LIB_HDR}
+        "${CMAKE_CURRENT_SOURCE_DIR}/drive_manager_ui.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/main_gui.cpp"
 )
 
 target_include_directories(media_storage PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/libs"
+)
+
+target_include_directories(media_storage_gui PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/libs"
 )

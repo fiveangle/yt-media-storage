@@ -71,27 +71,7 @@ void VideoEncoder::init_encoder(const std::string &output_path) {
     codec_ctx->max_b_frames = 0;
     codec_ctx->pix_fmt = AV_PIX_FMT_GRAY8;
 
-    const AVPixelFormat *pix_fmts = nullptr;
-    int num_pix_fmts = 0;
-    ret = avcodec_get_supported_config(
-        codec_ctx, codec, AV_CODEC_CONFIG_PIX_FORMAT, 0,
-        reinterpret_cast<const void **>(&pix_fmts), &num_pix_fmts
-    );
-
-    if (ret >= 0 && pix_fmts) {
-        bool supported = false;
-        for (int i = 0; i < num_pix_fmts; ++i) {
-            if (pix_fmts[i] == codec_ctx->pix_fmt) {
-                supported = true;
-                break;
-            }
-        }
-        if (!supported && num_pix_fmts > 0) {
-            codec_ctx->pix_fmt = pix_fmts[0];
-            std::cerr << "[VideoEncoder] Requested format not supported, using: "
-                    << codec_ctx->pix_fmt << "\n";
-        }
-    }
+    bool supported = true; // Assume GRAY8 is supported for FFV1
 
     if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER) {
         codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;

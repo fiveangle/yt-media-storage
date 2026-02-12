@@ -14,6 +14,7 @@
 
 #include "chunker.h"
 #include "configuration.h"
+#include "crypto.h"
 #include "decoder.h"
 #include "encoder.h"
 #include "video_encoder.h"
@@ -42,11 +43,12 @@ static std::array<std::byte, 16> make_file_id() {
 
 static void print_usage(const char *program) {
     std::cerr << "Usage:\n"
-            << "  " << program << " encode --input <file> --output <video>\n"
-            << "  " << program << " decode --input <video> --output <file>\n";
+            << "  " << program << " encode --input <file> --output <video> [--encrypt --password <pwd>]\n"
+            << "  " << program << " decode --input <video> --output <file> [--password <pwd>]\n";
 }
 
-static int do_encode(const std::string &input_path, const std::string &output_path) {
+static int do_encode(const std::string &input_path, const std::string &output_path,
+                     bool encrypt, const std::string &password) {
     if (!std::filesystem::exists(input_path)) {
         std::cerr << "Error: input file not found: " << input_path << "\n";
         return 1;
@@ -55,19 +57,34 @@ static int do_encode(const std::string &input_path, const std::string &output_pa
     const auto input_size = std::filesystem::file_size(input_path);
     std::cout << "Input: " << input_path << " (" << format_size(input_size) << ")\n";
 
-    const auto chunked = chunkFile(input_path.c_str());
+    const std::size_t chunk_size = encrypt ? CHUNK_SIZE_PLAIN_MAX_ENCRYPTED : 0;
+    const auto chunked = chunkFile(input_path.c_str(), chunk_size);
     const std::size_t num_chunks = chunked.chunks.size();
     std::cout << "Chunks: " << num_chunks << "\n";
 
-    const Encoder encoder(make_file_id());
-    std::vector<std::vector<Packet> > all_chunk_packets(num_chunks);
+    const auto file_id = make_file_id();
+    const Encoder encoder(file_id);
+    std::vector<std::vector<Packet>> all_chunk_packets(num_chunks);
+
+    std::array<std::byte, CRYPTO_KEY_BYTES> key{};
+    if (encrypt) {
+        const std::span<const std::byte> pw(reinterpret_cast<const std::byte *>(password.data()),
+                                            password.size());
+        key = derive_key(pw, file_id);
+    }
 
 #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < static_cast<int>(num_chunks); ++i) {
-        const auto chunk_data = chunkSpan(chunked, static_cast<std::size_t>(i));
+        auto chunk_data = chunkSpan(chunked, static_cast<std::size_t>(i));
+        std::span<const std::byte> data_to_encode = chunk_data;
+        std::vector<std::byte> encrypted_buf;
+        if (encrypt) {
+            encrypted_buf = encrypt_chunk(chunk_data, key, file_id, static_cast<uint32_t>(i));
+            data_to_encode = encrypted_buf;
+        }
         const bool is_last = (i == static_cast<int>(num_chunks) - 1);
         auto [chunk_packets, manifest] =
-                encoder.encode_chunk(static_cast<uint32_t>(i), chunk_data, is_last);
+                encoder.encode_chunk(static_cast<uint32_t>(i), data_to_encode, is_last, encrypt);
         all_chunk_packets[i] = std::move(chunk_packets);
     }
 
@@ -85,8 +102,15 @@ static int do_encode(const std::string &input_path, const std::string &output_pa
         }
         video_encoder.finalize();
     } catch (const std::exception &e) {
+        if (encrypt) {
+            secure_zero(std::span<std::byte>(key));
+        }
         std::cerr << "Error writing video: " << e.what() << "\n";
         return 1;
+    }
+
+    if (encrypt) {
+        secure_zero(std::span<std::byte>(key));
     }
 
     const auto video_size = std::filesystem::file_size(output_path);
@@ -97,7 +121,8 @@ static int do_encode(const std::string &input_path, const std::string &output_pa
     return 0;
 }
 
-static int do_decode(const std::string &input_path, const std::string &output_path) {
+static int do_decode(const std::string &input_path, const std::string &output_path,
+                    const std::string &password) {
     if (!std::filesystem::exists(input_path)) {
         std::cerr << "Error: input video not found: " << input_path << "\n";
         return 1;
@@ -178,10 +203,30 @@ static int do_decode(const std::string &input_path, const std::string &output_pa
         return 1;
     }
 
+    if (decoder.is_encrypted()) {
+        if (password.empty()) {
+            std::cerr << "Error: content is encrypted, password required (use --password)\n";
+            return 1;
+        }
+        const std::span<const std::byte> pw(reinterpret_cast<const std::byte *>(password.data()),
+                                            password.size());
+        auto key = derive_key(pw, *decoder.file_id());
+        decoder.set_decrypt_key(key);
+        secure_zero(std::span<std::byte>(key));
+    }
+
     auto assembled = decoder.assemble_file(expected_chunks);
     if (!assembled) {
-        std::cerr << "Error: failed to assemble file from decoded chunks\n";
+        if (decoder.is_encrypted()) {
+            decoder.clear_decrypt_key();
+        }
+        std::cerr << "Error: failed to assemble file from decoded chunks "
+                << "(wrong password or corrupted data)\n";
         return 1;
+    }
+
+    if (decoder.is_encrypted()) {
+        decoder.clear_decrypt_key();
     }
 
     std::ofstream out(output_path, std::ios::binary);
@@ -217,12 +262,19 @@ int main(const int argc, char *argv[]) {
 
     std::string input_path;
     std::string output_path;
+    bool encrypt = false;
+    std::string password;
 
     for (int i = 2; i < argc; ++i) {
-        if (const std::string arg = argv[i]; (arg == "--input" || arg == "-i") && i + 1 < argc) {
+        const std::string arg = argv[i];
+        if ((arg == "--input" || arg == "-i") && i + 1 < argc) {
             input_path = argv[++i];
         } else if ((arg == "--output" || arg == "-o") && i + 1 < argc) {
             output_path = argv[++i];
+        } else if ((arg == "--encrypt" || arg == "-e")) {
+            encrypt = true;
+        } else if ((arg == "--password" || arg == "-p") && i + 1 < argc) {
+            password = argv[++i];
         } else {
             std::cerr << "Error: unknown or incomplete argument '" << arg << "'\n";
             print_usage(argv[0]);
@@ -236,9 +288,14 @@ int main(const int argc, char *argv[]) {
         return 1;
     }
 
+    if (encrypt && password.empty()) {
+        std::cerr << "Error: --encrypt requires --password\n";
+        return 1;
+    }
+
     if (command == "encode") {
-        return do_encode(input_path, output_path);
+        return do_encode(input_path, output_path, encrypt, password);
     } else {
-        return do_decode(input_path, output_path);
+        return do_decode(input_path, output_path, password);
     }
 }

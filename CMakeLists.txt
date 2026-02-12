@@ -34,6 +34,7 @@ pkg_check_modules(AVFORMAT REQUIRED IMPORTED_TARGET libavformat)
 pkg_check_modules(AVUTIL REQUIRED IMPORTED_TARGET libavutil)
 pkg_check_modules(SWSCALE REQUIRED IMPORTED_TARGET libswscale)
 pkg_check_modules(SWRESAMPLE REQUIRED IMPORTED_TARGET libswresample)
+pkg_check_modules(SODIUM REQUIRED IMPORTED_TARGET libsodium)
 
 add_executable(media_storage)
 add_executable(media_storage_gui)
@@ -46,6 +47,7 @@ target_link_libraries(media_storage PRIVATE
         PkgConfig::AVUTIL
         PkgConfig::SWSCALE
         PkgConfig::SWRESAMPLE
+        PkgConfig::SODIUM
         OpenMP::OpenMP_CXX
 )
 
@@ -55,6 +57,7 @@ target_link_libraries(media_storage_gui PRIVATE
         PkgConfig::AVUTIL
         PkgConfig::SWSCALE
         PkgConfig::SWRESAMPLE
+        PkgConfig::SODIUM
         OpenMP::OpenMP_CXX
         Qt6::Core
         Qt6::Widgets

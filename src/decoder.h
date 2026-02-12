@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "integrity.h"
+#include "configuration.h"
 
 struct PacketHeader {
     uint32_t magic = 0;
@@ -17,6 +18,7 @@ struct PacketHeader {
     std::array<std::byte, 16> file_id{};
     uint32_t chunk_index = 0;
     uint32_t chunk_size = 0;
+    uint32_t original_size = 0;  // v2 only; equals chunk_size for v1
     uint16_t symbol_size = 0;
     uint32_t k = 0; // num source symbols
     uint32_t esi = 0; // encoding symbol id (block id)
@@ -101,8 +103,17 @@ public:
 
     [[nodiscard]] std::optional<std::vector<std::byte>> assemble_file(uint32_t expected_chunks) const;
 
+    void set_decrypt_key(std::span<const std::byte, 32> key);
+
+    void clear_decrypt_key();
+
+    [[nodiscard]] bool is_encrypted() const { return encrypted_; }
+
 private:
     std::optional<FileId> id;
+    bool encrypted_ = false;
+    std::array<std::byte, 32> decrypt_key_{};
+    bool decrypt_key_set_ = false;
     std::map<uint32_t, ChunkDecoder> active_decoders;
     std::map<uint32_t, std::vector<std::byte>> completed_chunks;
     size_t total_packets_ = 0;

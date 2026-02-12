@@ -14,6 +14,7 @@
 #include <QSplitter>
 #include <QGroupBox>
 #include <QLineEdit>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QStatusBar>
 #include <QTimer>
@@ -32,7 +33,8 @@ public:
         Decode
     };
 
-    WorkerThread(Operation op, const QString& input, const QString& output, QObject* parent = nullptr);
+    WorkerThread(Operation op, const QString& input, const QString& output,
+                 bool encrypt = false, const QString& password = QString(), QObject* parent = nullptr);
 
 signals:
     void progressUpdated(int percentage);
@@ -47,6 +49,8 @@ private:
     Operation operation;
     QString inputPath;
     QString outputPath;
+    bool encrypt;
+    QString password;
 };
 
 class DriveManagerUI : public QMainWindow {
@@ -94,6 +98,8 @@ private:
     QLineEdit* outputFileEdit;
     QPushButton* selectInputButton;
     QPushButton* selectOutputButton;
+    QCheckBox* encryptCheckBox;
+    QLineEdit* passwordEdit;
     QPushButton* encodeButton;
     QPushButton* decodeButton;
     

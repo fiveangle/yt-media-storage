@@ -13,6 +13,8 @@ const std::string VIDEO_CONTAINER = "mkv";
 
 // Encoding Parameters
 constexpr size_t CHUNK_SIZE_BYTES = 1024ull * 1024ull; // 1 MiB
+constexpr size_t CRYPTO_AEAD_TAG_BYTES = 16;
+inline constexpr size_t CHUNK_SIZE_PLAIN_MAX_ENCRYPTED = CHUNK_SIZE_BYTES - 4 - CRYPTO_AEAD_TAG_BYTES;
 constexpr size_t SYMBOL_SIZE_BYTES = 256;
 constexpr double REPAIR_OVERHEAD = 3.00;
 constexpr bool INCLUDE_SOURCE = true;
@@ -23,6 +25,7 @@ enum Flags : uint8_t {
     None = 0,
     IsRepairSymbol = 1 << 0,
     LastChunk = 1 << 1,
+    Encrypted = 1 << 2,
 };
 
 // Header Scheme
@@ -32,6 +35,7 @@ constexpr size_t CHUNK_SIZE = 1024;
 
 constexpr uint32_t MAGIC_ID = 0x59544653;
 constexpr uint8_t VERSION_ID = 1;
+constexpr uint8_t VERSION_ID_V2 = 2;
 
 constexpr size_t MAGIC_SIZE = 4;
 constexpr size_t VERSION_SIZE = 1;
@@ -43,6 +47,7 @@ constexpr size_t SYMBOL_SIZE_SIZE = 2;
 constexpr size_t K_SIZE = 4;
 constexpr size_t ESI_SIZE = 4;
 constexpr size_t PAYLOAD_LEN_SIZE = 2;
+constexpr size_t ORIGINAL_SIZE_SIZE = 4;
 constexpr size_t CRC_SIZE = 4;
 
 constexpr size_t MAGIC_OFF = 0;
@@ -57,6 +62,11 @@ constexpr size_t ESI_OFF = K_OFF + K_SIZE;
 constexpr size_t PAYLOAD_LEN_OFF = ESI_OFF + ESI_SIZE;
 constexpr size_t CRC_OFF = PAYLOAD_LEN_OFF + PAYLOAD_LEN_SIZE;
 constexpr size_t HEADER_SIZE = CRC_OFF + CRC_SIZE;
+
+// V2 header: original_size inserted between PAYLOAD_LEN and CRC (fixes small-file padding)
+constexpr size_t ORIGINAL_SIZE_OFF = PAYLOAD_LEN_OFF + PAYLOAD_LEN_SIZE;
+constexpr size_t CRC_OFF_V2 = ORIGINAL_SIZE_OFF + ORIGINAL_SIZE_SIZE;
+constexpr size_t HEADER_SIZE_V2 = CRC_OFF_V2 + CRC_SIZE;
 
 // Frame Layout
 struct FrameLayout {

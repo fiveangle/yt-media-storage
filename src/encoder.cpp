@@ -76,12 +76,12 @@ static uint8_t buildFlags(const uint32_t blockId, const uint32_t numSource, cons
 
 static Packet buildPacket(
     const std::vector<std::byte> &header,
-    const std::vector<std::byte> &payload) {
+    std::span<const std::byte> payload) {
     Packet packet;
     const std::size_t totalSize = header.size() + payload.size();
-    packet.bytes.reserve(totalSize);
-    packet.bytes.insert(packet.bytes.end(), header.begin(), header.end());
-    packet.bytes.insert(packet.bytes.end(), payload.begin(), payload.end());
+    packet.bytes.resize(totalSize);
+    std::memcpy(packet.bytes.data(), header.data(), header.size());
+    std::memcpy(packet.bytes.data() + header.size(), payload.data(), payload.size());
     return packet;
 }
 
@@ -175,23 +175,22 @@ Encoder::encode_chunk(
     std::vector<Packet> packets;
     packets.reserve(packetCount);
 
+    std::array<std::byte, SYMBOL_SIZE_BYTES> payload_buffer{};
     for (uint32_t blockId = firstBlockId; blockId <= lastBlockId; ++blockId) {
-        std::vector payload(SYMBOL_SIZE_BYTES, std::byte{0});
-
         uint32_t writeLen = 0;
-        const auto payloadSize = static_cast<uint32_t>(payload.size());
-        if (const WirehairResult result = wirehair_encode(codec, blockId, payload.data(), payloadSize, &writeLen); result != Wirehair_Success) {
+        if (const WirehairResult result = wirehair_encode(codec, blockId, payload_buffer.data(), static_cast<uint32_t>(payload_buffer.size()), &writeLen); result != Wirehair_Success) {
             wirehair_free(codec);
             throw std::runtime_error("wirehair_encode() failed");
         }
 
         const uint8_t flags = buildFlags(blockId, numSource, is_last_chunk, encrypted);
         const auto payloadLen = static_cast<uint16_t>(writeLen);
+        const std::span<const std::byte> payload_span(payload_buffer.data(), writeLen);
 
         std::vector<std::byte> header = create_packet_header(
-            chunk_index, chunkSize, manifest.original_size, symbolSize, numSource, blockId, payloadLen, flags, payload);
+            chunk_index, chunkSize, manifest.original_size, symbolSize, numSource, blockId, payloadLen, flags, payload_span);
 
-        Packet packet = buildPacket(header, payload);
+        Packet packet = buildPacket(header, payload_span);
         packets.push_back(std::move(packet));
     }
 

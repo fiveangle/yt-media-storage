@@ -155,6 +155,48 @@ std::vector<std::byte> decrypt_chunk(
     return plain;
 }
 
+void decrypt_chunk_into(std::span<std::byte> out,
+    std::span<const std::byte> chunk_from_decoder,
+    std::span<const std::byte, CRYPTO_KEY_BYTES> key,
+    std::span<const std::byte, 16> file_id,
+    uint32_t chunk_index) {
+    ensure_sodium_init();
+
+    if (chunk_from_decoder.size() < CRYPTO_PLAIN_SIZE_HEADER) {
+        throw std::runtime_error("Decryption failed (chunk too small)");
+    }
+
+    const uint32_t plain_size = read_plain_size_from_header(chunk_from_decoder);
+    const std::size_t cipher_len = plain_size + crypto_aead_xchacha20poly1305_ietf_ABYTES;
+    if (plain_size > CHUNK_SIZE_BYTES ||
+        chunk_from_decoder.size() < CRYPTO_PLAIN_SIZE_HEADER + cipher_len ||
+        out.size() < plain_size) {
+        throw std::runtime_error("Decryption failed (wrong password or corrupted data)");
+    }
+
+    std::array<unsigned char, crypto_aead_xchacha20poly1305_ietf_NPUBBYTES> nonce{};
+    build_nonce(nonce, file_id, chunk_index);
+
+    unsigned long long written = 0;
+    const auto cipher_span = chunk_from_decoder.subspan(CRYPTO_PLAIN_SIZE_HEADER, cipher_len);
+    if (crypto_aead_xchacha20poly1305_ietf_decrypt(
+            reinterpret_cast<unsigned char*>(out.data()),
+            &written,
+            nullptr,
+            reinterpret_cast<const unsigned char*>(cipher_span.data()),
+            cipher_span.size(),
+            nullptr,
+            0,
+            nonce.data(),
+            reinterpret_cast<const unsigned char*>(key.data())) != 0) {
+        throw std::runtime_error("Decryption failed (wrong password or corrupted data)");
+    }
+
+    if (written != plain_size) {
+        throw std::runtime_error("Decryption failed (size mismatch)");
+    }
+}
+
 void secure_zero(std::span<std::byte> data) {
     if (!data.empty()) {
         sodium_memzero(data.data(), data.size());

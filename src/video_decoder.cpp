@@ -192,6 +192,7 @@ std::vector<std::vector<std::byte> > VideoDecoder::extract_packets_from_frame() 
             packet_size = HEADER_SIZE_V2 + SYMBOL_SIZE_BYTES;
         }
     }
+    packets.reserve(raw_data.size() / packet_size);
     std::size_t offset = 0;
     while (offset + packet_size <= raw_data.size()) {
         if (offset + 4 <= raw_data.size()) {

@@ -70,11 +70,13 @@ public:
 
     ChunkDecoder &operator=(ChunkDecoder &&other) noexcept;
 
-    bool add_packet(uint32_t esi, std::span<const std::byte> payload);
+    [[nodiscard]] bool add_packet(uint32_t esi, std::span<const std::byte> payload);
 
     [[nodiscard]] bool is_complete() const { return decoded_; }
 
     [[nodiscard]] std::vector<std::byte> get_decoded_data() const;
+
+    [[nodiscard]] std::vector<std::byte> consume_decoded_data();
 
     [[nodiscard]] uint32_t chunk_index() const { return chunk_index_; }
 
@@ -103,9 +105,9 @@ public:
 
     [[nodiscard]] static bool validate_raw_packet_crc(std::span<const std::byte> packet_data);
 
-    std::optional<ChunkDecodeResult> process_packet(std::span<const std::byte> packet_data);
+    [[nodiscard]] std::optional<ChunkDecodeResult> process_packet(std::span<const std::byte> packet_data);
 
-    std::optional<ChunkDecodeResult> process_packet(const DecodedPacket &packet);
+    [[nodiscard]] std::optional<ChunkDecodeResult> process_packet(const DecodedPacket &packet);
 
     [[nodiscard]] bool is_chunk_complete(uint32_t chunk_index) const;
 

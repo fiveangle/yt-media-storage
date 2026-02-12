@@ -482,6 +482,9 @@ std::optional<std::vector<std::size_t>> compute_chunk_sizes(
                 return std::nullopt;
             }
             sizes[idx] = read_plain_size_from_header(chunk);
+            if (sizes[idx] > CHUNK_SIZE_BYTES) {
+                return std::nullopt;
+            }
         } else {
             sizes[idx] = chunk.size();
         }

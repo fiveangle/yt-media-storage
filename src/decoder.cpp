@@ -392,7 +392,7 @@ std::vector<uint32_t> Decoder::completed_chunk_indices() const {
     return indices;
 }
 
-void Decoder::set_decrypt_key(std::span<const std::byte, 32> key) {
+void Decoder::set_decrypt_key(const std::span<const std::byte, 32> key) {
     std::memcpy(decrypt_key_.data(), key.data(), 32);
     decrypt_key_set_ = true;
 }
@@ -405,58 +405,56 @@ void Decoder::clear_decrypt_key() {
 }
 
 namespace {
-
-std::optional<std::vector<std::size_t>> compute_chunk_sizes(
-    const std::map<uint32_t, std::vector<std::byte>> &chunks,
-    uint32_t expected_chunks,
-    bool encrypted,
-    bool decrypt_key_set) {
-    std::vector<std::size_t> sizes(expected_chunks);
-    for (uint32_t i = 0; i < expected_chunks; ++i) {
-        const auto &chunk = chunks.at(i);
-        if (encrypted && decrypt_key_set) {
-            if (chunk.size() < CRYPTO_PLAIN_SIZE_HEADER) {
-                return std::nullopt;
+    std::optional<std::vector<std::size_t> > compute_chunk_sizes(
+        const std::map<uint32_t, std::vector<std::byte> > &chunks,
+        const uint32_t expected_chunks,
+        const bool encrypted,
+        const bool decrypt_key_set) {
+        std::vector<std::size_t> sizes(expected_chunks);
+        for (uint32_t i = 0; i < expected_chunks; ++i) {
+            const auto &chunk = chunks.at(i);
+            if (encrypted && decrypt_key_set) {
+                if (chunk.size() < CRYPTO_PLAIN_SIZE_HEADER) {
+                    return std::nullopt;
+                }
+                sizes[i] = read_plain_size_from_header(chunk);
+            } else {
+                sizes[i] = chunk.size();
             }
-            sizes[i] = read_plain_size_from_header(chunk);
-        } else {
-            sizes[i] = chunk.size();
         }
+        return sizes;
     }
-    return sizes;
-}
 
-std::vector<std::size_t> compute_prefix_offsets(const std::vector<std::size_t> &sizes) {
-    std::vector<std::size_t> offsets(sizes.size() + 1);
-    offsets[0] = 0;
-    for (std::size_t i = 0; i < sizes.size(); ++i) {
-        offsets[i + 1] = offsets[i] + sizes[i];
+    std::vector<std::size_t> compute_prefix_offsets(const std::vector<std::size_t> &sizes) {
+        std::vector<std::size_t> offsets(sizes.size() + 1);
+        offsets[0] = 0;
+        for (std::size_t i = 0; i < sizes.size(); ++i) {
+            offsets[i + 1] = offsets[i] + sizes[i];
+        }
+        return offsets;
     }
-    return offsets;
-}
 
-void decrypt_and_copy_into(
-    std::vector<std::byte> &result,
-    const std::map<uint32_t, std::vector<std::byte>> &chunks,
-    uint32_t expected_chunks,
-    const std::vector<std::size_t> &offsets,
-    bool encrypted,
-    bool decrypt_key_set,
-    const std::array<std::byte, 32> &decrypt_key,
-    const std::array<std::byte, 16> &file_id) {
+    void decrypt_and_copy_into(
+        std::vector<std::byte> &result,
+        const std::map<uint32_t, std::vector<std::byte> > &chunks,
+        const uint32_t expected_chunks,
+        const std::vector<std::size_t> &offsets,
+        const bool encrypted,
+        const bool decrypt_key_set,
+        const std::array<std::byte, 32> &decrypt_key,
+        const std::array<std::byte, 16> &file_id) {
 #pragma omp parallel for schedule(static)
-    for (uint32_t i = 0; i < expected_chunks; ++i) {
-        std::vector<std::byte> chunk_data = chunks.at(i);
-        if (encrypted && decrypt_key_set) {
-            chunk_data = decrypt_chunk(chunk_data, decrypt_key, file_id, i);
+        for (int i = 0; i < expected_chunks; ++i) {
+            std::vector<std::byte> chunk_data = chunks.at(i);
+            if (encrypted && decrypt_key_set) {
+                chunk_data = decrypt_chunk(chunk_data, decrypt_key, file_id, i);
+            }
+            std::memcpy(result.data() + offsets[i], chunk_data.data(), chunk_data.size());
         }
-        std::memcpy(result.data() + offsets[i], chunk_data.data(), chunk_data.size());
     }
 }
 
-}
-
-std::optional<std::vector<std::byte>> Decoder::assemble_file(const uint32_t expected_chunks) const {
+std::optional<std::vector<std::byte> > Decoder::assemble_file(const uint32_t expected_chunks) const {
     if (completed_chunks.size() != expected_chunks) {
         return std::nullopt;
     }
@@ -480,6 +478,6 @@ std::optional<std::vector<std::byte>> Decoder::assemble_file(const uint32_t expe
     const auto offsets = compute_prefix_offsets(*chunk_sizes);
     std::vector<std::byte> result(offsets[expected_chunks]);
     decrypt_and_copy_into(result, completed_chunks, expected_chunks, offsets,
-        encrypted_, decrypt_key_set_, decrypt_key_, *id);
+                          encrypted_, decrypt_key_set_, decrypt_key_, *id);
     return result;
 }

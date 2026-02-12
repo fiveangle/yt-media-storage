@@ -16,6 +16,15 @@ static void ensure_sodium_init() {
     });
 }
 
+uint32_t read_plain_size_from_header(const std::span<const std::byte> chunk) {
+    uint32_t plain_size = 0;
+    plain_size |= static_cast<uint32_t>(static_cast<uint8_t>(chunk[0]));
+    plain_size |= static_cast<uint32_t>(static_cast<uint8_t>(chunk[1])) << 8;
+    plain_size |= static_cast<uint32_t>(static_cast<uint8_t>(chunk[2])) << 16;
+    plain_size |= static_cast<uint32_t>(static_cast<uint8_t>(chunk[3])) << 24;
+    return plain_size;
+}
+
 std::array<std::byte, CRYPTO_KEY_BYTES> derive_key(
     std::span<const std::byte> password,
     std::span<const std::byte, 16> salt) {
@@ -99,12 +108,7 @@ std::vector<std::byte> decrypt_chunk(
         throw std::runtime_error("Decryption failed (chunk too small)");
     }
 
-    uint32_t plain_size = 0;
-    plain_size |= static_cast<uint32_t>(static_cast<uint8_t>(chunk_from_decoder[0]));
-    plain_size |= static_cast<uint32_t>(static_cast<uint8_t>(chunk_from_decoder[1])) << 8;
-    plain_size |= static_cast<uint32_t>(static_cast<uint8_t>(chunk_from_decoder[2])) << 16;
-    plain_size |= static_cast<uint32_t>(static_cast<uint8_t>(chunk_from_decoder[3])) << 24;
-
+    const uint32_t plain_size = read_plain_size_from_header(chunk_from_decoder);
     const std::size_t cipher_len = plain_size + crypto_aead_xchacha20poly1305_ietf_ABYTES;
     if (plain_size > CHUNK_SIZE_BYTES ||
         chunk_from_decoder.size() < CRYPTO_PLAIN_SIZE_HEADER + cipher_len) {

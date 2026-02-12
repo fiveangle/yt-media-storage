@@ -414,12 +414,7 @@ std::optional<std::vector<std::byte>> Decoder::assemble_file(const uint32_t expe
             if (chunk.size() < CRYPTO_PLAIN_SIZE_HEADER) {
                 return std::nullopt;
             }
-            uint32_t plain_size = 0;
-            plain_size |= static_cast<uint32_t>(static_cast<uint8_t>(chunk[0]));
-            plain_size |= static_cast<uint32_t>(static_cast<uint8_t>(chunk[1])) << 8;
-            plain_size |= static_cast<uint32_t>(static_cast<uint8_t>(chunk[2])) << 16;
-            plain_size |= static_cast<uint32_t>(static_cast<uint8_t>(chunk[3])) << 24;
-            chunk_sizes[i] = plain_size;
+            chunk_sizes[i] = read_plain_size_from_header(chunk);
         } else {
             chunk_sizes[i] = chunk.size();
         }
